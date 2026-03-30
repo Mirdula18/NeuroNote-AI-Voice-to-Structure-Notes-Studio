@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NeuroNote AI</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Use Inter fonts for modern UI -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Markdown parser -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- D3 for mind map visualization -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+</head>
+<body>
+  
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-brain"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/></svg>
+        <h2>NeuroNote AI</h2>
+      </div>
+      
+      <button class="new-note-btn" id="new-note-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+        New Note
+      </button>
+
+      <div class="nav-section">
+        <h3>Your Notes</h3>
+        <ul id="notes-list" class="notes-list">
+          <!-- Populated by JS -->
+        </ul>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      
+      <!-- Top header with recording controls -->
+      <header class="top-bar">
+        <div class="top-bar-actions">
+          <button id="upload-btn" class="secondary-btn">Upload Note</button>
+          <input type="file" id="upload-input" accept=".txt,.docx" class="hidden-file-input" />
+        </div>
+        <div class="status-chips" aria-label="service status">
+          <span id="backend-status" class="status-chip status-pending">Backend</span>
+          <span id="ollama-status" class="status-chip status-pending">Ollama</span>
+        </div>
+        <div class="recording-controls">
+          <button id="record-btn" class="record-btn">
+             <span class="record-icon"></span>
+             <span id="record-text">Start Recording</span>
+          </button>
+          <div id="recording-status" class="recording-status hidden">
+            <span class="pulsing-dot"></span>
+            <span id="recording-time">00:00</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Loading / Processing State -->
+      <div id="processing-view" class="processing-view hidden">
+        <div class="spinner"></div>
+        <h3 id="processing-text">Processing Audio...</h3>
+        <p class="processing-subtext" id="processing-subtext">Whisper is transcribing...</p>
+      </div>
+
+      <!-- Viewer/Editor Area -->
+      <div id="note-view" class="note-view hidden">
+        <header class="note-header">
+          <div class="note-title-wrap">
+           <h1 id="note-title" contenteditable="true">Untitled Note</h1>
+           <span id="fallback-badge" class="fallback-badge hidden" title="LLM unavailable, used heuristic fallback">Fallback</span>
+          </div>
+           <div class="note-actions">
+              <button id="export-md-btn" class="secondary-btn">Export Markdown</button>
+              <button id="delete-btn" class="danger-btn">Delete</button>
+           </div>
+        </header>
+        
+        <div class="note-split">
+          <!-- Left side: The Structured Note -->
+          <div class="note-main">
+            <div class="note-tags" id="note-tags"></div>
+            <div class="note-summary-box">
+               <h4>Summary</h4>
+               <p id="note-summary"></p>
+            </div>
+            <div class="note-content markdown-body" id="note-content">
+               <!-- Markdown content -->
+            </div>
+          </div>
+          
+          <!-- Right side: Raw Transcript & Mindmap (Simplified) -->
+          <div class="note-sidebar">
+             <div class="panel">
+                <h4>Raw Transcript</h4>
+                <div class="transcript-box" id="raw-transcript"></div>
+             </div>
+             
+             <div class="panel" id="mindmap-panel">
+                <h4>Structure</h4>
+                <ul class="mindmap-list" id="mindmap-container">
+                   <!-- Recursive list -->
+                </ul>
+               <div class="mindmap-graph" id="mindmap-graph" aria-label="Mind map graph"></div>
+             </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Welcome State -->
+      <div id="welcome-view" class="welcome-view">
+         <div class="welcome-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-mic"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/>< x1="12" x2="12" y1="19" y2="22"/></svg>
+         </div>
+         <h2>Welcome to NeuroNote AI</h2>
+         <p>Click "Start Recording" or select an existing note from the sidebar.</p>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="app.js?v=20260330"></script>
+</body>
+</html>
