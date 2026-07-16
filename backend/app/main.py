@@ -1,5 +1,6 @@
 """NeuroNote AI - FastAPI Application Entry Point"""
 
+import logging
 from contextlib import asynccontextmanager
 
 import httpx
@@ -11,11 +12,22 @@ from app.config import settings
 from app.database import async_session, init_db
 from app.routes import notes, transcribe, export
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize services on startup."""
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logger.info("Starting NeuroNote AI")
     await init_db()
+    # Preload whisper model to avoid blocking the event loop on first request
+    try:
+        from app.services.whisper_service import get_whisper_model
+        get_whisper_model()
+        logger.info("Whisper model preloaded")
+    except Exception as e:
+        logger.warning(f"Could not preload whisper model: {e}")
     yield
 
 
@@ -27,11 +39,9 @@ app = FastAPI(
 )
 
 # CORS
-# Allow local frontend dev servers on localhost/127.0.0.1 with any port.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -54,9 +64,9 @@ async def health_check():
             await session.execute(text("SELECT 1"))
         status["components"]["database"] = "ok"
     except Exception as exc:
+        logger.error(f"Database health check failed: {exc}")
         status["components"]["database"] = "error"
         status["status"] = "degraded"
-        status["db_error"] = str(exc)
 
     # Ollama check (fast, non-streaming)
     try:
@@ -65,8 +75,8 @@ async def health_check():
             resp.raise_for_status()
         status["components"]["ollama"] = "ok"
     except Exception as exc:
+        logger.error(f"Ollama health check failed: {exc}")
         status["components"]["ollama"] = "error"
         status["status"] = "degraded"
-        status["ollama_error"] = str(exc)
 
     return status
