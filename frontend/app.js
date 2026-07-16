@@ -1,5 +1,5 @@
-// Configuration
-const API_BASE_URL = 'http://127.0.0.1:8000/api';
+// Configuration — read from <meta name="api-base-url"> or fall back to default
+const API_BASE_URL = document.querySelector('meta[name="api-base-url"]')?.content || 'http://127.0.0.1:8000/api';
 
 // UI Elements
 const viewWelcome = document.getElementById('welcome-view');
@@ -60,7 +60,7 @@ async function checkBackendConnection() {
     if (ollamaStatus === 'ok') {
       setStatusChip(ollamaStatusChip, 'ok', 'Ollama responding');
     } else if (ollamaStatus === 'error') {
-      setStatusChip(ollamaStatusChip, 'warn', data.ollama_error || 'Ollama unavailable');
+      setStatusChip(ollamaStatusChip, 'warn', 'Ollama unavailable');
     } else {
       setStatusChip(ollamaStatusChip, 'warn', 'Ollama status unknown');
     }
@@ -337,22 +337,102 @@ async function processAudioBlob() {
     }
 }
 
-function showErrorNotification(message) {
-    // Show error in console and as alert for now
-    console.error(message);
-    if (confirm(`${message}\n\nOpen browser console (F12) for more details?`)) {
-        // Attempt to open dev tools (most browsers will ignore this for security)
-        console.log("Error details visible in console.");
-    }
-}
-
-// --- UI Rendering ---
-
-// Simple HTML sanitizer to prevent XSS
+// HTML sanitizer — strip all tags to plain text (safe, no DOMPurify dependency)
 function sanitizeHTML(html) {
   const div = document.createElement('div');
   div.textContent = html;
   return div.innerHTML;
+}
+
+// --- Toast Notifications ---
+
+function ensureToastContainer() {
+  let c = document.querySelector('.toast-container');
+  if (!c) {
+    c = document.createElement('div');
+    c.className = 'toast-container';
+    document.body.appendChild(c);
+  }
+  return c;
+}
+
+function showToast(message, type = 'info', durationMs = 4000) {
+  const container = ensureToastContainer();
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = `<div class="toast-message">${sanitizeHTML(message)}</div>`;
+  container.appendChild(toast);
+  if (durationMs > 0) {
+    setTimeout(() => {
+      toast.classList.add('toast-leaving');
+      toast.addEventListener('animationend', () => toast.remove());
+    }, durationMs);
+  }
+  return toast;
+}
+
+function showConfirm(message) {
+  return new Promise(resolve => {
+    const container = ensureToastContainer();
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-info';
+    toast.innerHTML = `
+      <div class="toast-message">${sanitizeHTML(message)}</div>
+      <div class="toast-actions">
+        <button class="toast-btn toast-btn-cancel">Cancel</button>
+        <button class="toast-btn toast-btn-confirm">Confirm</button>
+      </div>
+    `;
+    toast.querySelector('.toast-btn-cancel').addEventListener('click', () => {
+      toast.classList.add('toast-leaving');
+      toast.addEventListener('animationend', () => toast.remove());
+      resolve(false);
+    });
+    toast.querySelector('.toast-btn-confirm').addEventListener('click', () => {
+      toast.classList.add('toast-leaving');
+      toast.addEventListener('animationend', () => toast.remove());
+      resolve(true);
+    });
+    container.appendChild(toast);
+  });
+}
+
+function showErrorNotification(message) {
+  console.error(message);
+  showToast(message, 'error', 6000);
+}
+
+// Sanitize markdown HTML: allow only safe display tags, strip scripts/events
+function sanitizeMarkdownHTML(html) {
+  const allowed = new Set([
+    'P','BR','HR','STRONG','B','EM','I','U','S','DEL','SUB','SUP',
+    'H1','H2','H3','H4','H5','H6',
+    'UL','OL','LI',
+    'BLOCKQUOTE','PRE','CODE','KBD',
+    'TABLE','THEAD','TBODY','TFOOT','TR','TH','TD','CAPTION',
+    'A','IMG','SPAN','DIV','DETAILS','SUMMARY',
+  ]);
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  function strip(node) {
+    for (let i = node.childNodes.length - 1; i >= 0; i--) {
+      const child = node.childNodes[i];
+      if (child.nodeType === 1) {
+        const tag = child.tagName.toUpperCase();
+        if (!allowed.has(tag)) {
+          child.replaceWith(document.createTextNode(child.textContent));
+          continue;
+        }
+        for (const attr of [...child.attributes]) {
+          if (attr.name.startsWith('on') || (attr.name === 'href' && attr.value.trim().toLowerCase().startsWith('javascript:'))) {
+            child.removeAttribute(attr.name);
+          }
+        }
+        strip(child);
+      }
+    }
+  }
+  strip(doc.body);
+  return doc.body.innerHTML;
 }
 
 function showView(viewEl) {
@@ -375,17 +455,19 @@ function renderSidebarNotes(notes) {
     li.innerHTML = `
       <div class="note-item-main">
         <div>
-          <div class="note-item-title">${note.title || 'Untitled Note'}</div>
-          <div class="note-item-date">${dateStr}</div>
+          <div class="note-item-title"></div>
+          <div class="note-item-date"></div>
         </div>
         <button class="delete-note-btn" aria-label="Delete note" title="Delete note">×</button>
       </div>
     `;
+    li.querySelector('.note-item-title').textContent = note.title || 'Untitled Note';
+    li.querySelector('.note-item-date').textContent = dateStr;
     
     const deleteBtn = li.querySelector('.delete-note-btn');
     deleteBtn.addEventListener('click', async (event) => {
       event.stopPropagation();
-      if (!confirm('Delete this note? This cannot be undone.')) return;
+      if (!await showConfirm('Delete this note? This cannot be undone.')) return;
       try {
         const res = await fetch(`${API_BASE_URL}/notes/${note.id}`, { method: 'DELETE' });
         if (!res.ok) throw new Error(`Delete failed: HTTP ${res.status}`);
@@ -421,9 +503,9 @@ function renderNote(note) {
     fallbackBadge.classList.add('hidden');
   }
   
-  // Parse Markdown to HTML
+  // Parse Markdown to HTML (sanitize to prevent XSS)
   if (note.structured_notes) {
-    noteContent.innerHTML = marked.parse(note.structured_notes);
+    noteContent.innerHTML = sanitizeMarkdownHTML(marked.parse(note.structured_notes));
   } else {
     noteContent.innerHTML = "<p>No structured notes generated.</p>";
   }
@@ -588,7 +670,7 @@ btnNewNote.addEventListener('click', () => {
 
 btnDelete.addEventListener('click', async () => {
     if (!selectedNoteId) return;
-    if (confirm("Are you sure you want to delete this note? This cannot be undone.")) {
+    if (await showConfirm("Are you sure you want to delete this note? This cannot be undone.")) {
         try {
             const res = await fetch(`${API_BASE_URL}/notes/${selectedNoteId}`, { method: 'DELETE' });
             if (!res.ok) throw new Error(`Delete failed: HTTP ${res.status}`);
