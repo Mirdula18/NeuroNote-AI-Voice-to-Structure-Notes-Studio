@@ -86,11 +86,3 @@ async def transcribe_audio(audio_data: bytes, filename: str = "audio.webm") -> d
         # Clean up temp file
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
-
-
-async def transcribe_audio_stream(audio_data: bytes, filename: str = "audio.webm") -> str:
-    """
-    Simple transcription returning just the text — used for live streaming chunks.
-    """
-    result = await transcribe_audio(audio_data, filename)
-    return result["text"]
