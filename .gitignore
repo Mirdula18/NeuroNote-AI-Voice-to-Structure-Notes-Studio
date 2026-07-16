@@ -24,6 +24,7 @@ share/python-wheels/
 MANIFEST
 
 # Virtual Environments
+.venv/
 venv/
 env/
 ENV/
@@ -51,6 +52,15 @@ venv.bak/
 # Logs
 *.log
 logs/
+
+# Test / sample files
+sample_*.txt
+upload_test.py
+test_*.db
+
+# Pytest
+.pytest_cache/
+pytestdebug.log
 
 # Node (if frontend is converted to npm)
 node_modules/
