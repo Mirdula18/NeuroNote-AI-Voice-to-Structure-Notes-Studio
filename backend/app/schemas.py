@@ -17,13 +17,6 @@ class TranscriptionResponse(BaseModel):
 
 class StructureRequest(BaseModel):
     transcript: str
-    custom_prompt: Optional[str] = None
-
-
-class MindMapNode(BaseModel):
-    id: str
-    label: str
-    children: List["MindMapNode"] = []
 
 
 class StructuredNoteResponse(BaseModel):

@@ -2,8 +2,9 @@
 
 import json
 import logging
+import re
+
 import httpx
-from typing import Optional
 
 from app.config import settings
 
@@ -14,9 +15,9 @@ STRUCTURE_PROMPT = """You are NeuroNote AI, an expert at converting raw speech t
 Given the following raw transcript from a voice recording, produce a well-organized, structured output.
 
 TRANSCRIPT:
-\"\"\"
+<TRANSCRIPT>
 {transcript}
-\"\"\"
+</TRANSCRIPT>
 
 You MUST return a valid JSON object with exactly these keys:
 {{
@@ -57,13 +58,12 @@ RULES:
 - Return ONLY the JSON object, no other text"""
 
 
-async def structure_notes(transcript: str, custom_prompt: Optional[str] = None) -> dict:
+async def structure_notes(transcript: str) -> dict:
     """
     Send transcript to Ollama LLM and get structured notes back.
 
     Args:
         transcript: Raw transcript text
-        custom_prompt: Optional custom prompt to override default
 
     Returns:
         Structured notes dictionary
@@ -71,7 +71,7 @@ async def structure_notes(transcript: str, custom_prompt: Optional[str] = None) 
     if not transcript or not transcript.strip():
         return _empty_response()
 
-    prompt = custom_prompt or STRUCTURE_PROMPT.format(transcript=transcript)
+    prompt = STRUCTURE_PROMPT.format(transcript=transcript)
 
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
@@ -120,7 +120,6 @@ def _parse_llm_json(text: str) -> dict:
         pass
 
     # Try to find JSON block in markdown code fences
-    import re
     json_match = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", text)
     if json_match:
         try:
