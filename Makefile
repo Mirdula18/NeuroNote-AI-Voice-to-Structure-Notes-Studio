@@ -4,9 +4,8 @@ BACKEND := backend
 FRONTEND := frontend
 
 fmt:
-	$(PYTHON) -m black $(BACKEND)
-	$(PYTHON) -m isort $(BACKEND)
 	$(PYTHON) -m ruff format $(BACKEND)
+	$(PYTHON) -m ruff check --fix $(BACKEND)
 
 lint:
 	$(PYTHON) -m ruff check $(BACKEND)
